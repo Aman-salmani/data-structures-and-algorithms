@@ -1,0 +1,578 @@
+# Graph Data Structure — Complete Interview Notes (Java)
+
+
+## Chapter 1: Graph Basics
+
+### What is a Graph?
+A **network of nodes (vertices)** connected by **edges**. Unlike trees (hierarchical, no cycles), graphs can have cycles and no fixed root.
+
+**Real-world applications:**
+- **Maps** (Google Maps) → shortest path algorithms
+- **Social networks** → friend/follower graphs
+- **Delivery networks** → shortest cyclic path (start → deliver → return, TSP-like)
+
+### Key Terminology
+| Term | Meaning |
+|---|---|
+| **Vertex** | A node in the graph |
+| **Edge** | Connection between two vertices |
+| **Neighbor** | Vertex directly connected via an edge |
+| **Degree** | Number of edges connected to a vertex |
+
+### Types of Graphs (based on 2 properties)
+
+**1. Direction of edges:**
+- **Directed Graph** — edges have direction (A → B, one-way)
+- **Undirected Graph** — no direction (A — B, two-way / bidirectional)
+
+**2. Weight of edges:**
+- **Weighted Graph** — edges have an associated cost/weight (time, distance, money — can be positive, negative, or zero)
+- **Unweighted Graph** — no weight on edges
+
+→ Combine both to get 4 types: Directed-Weighted, Directed-Unweighted, Undirected-Weighted, Undirected-Unweighted.
+
+**How to identify type from a diagram:** Check (1) do edges have arrows (direction)? (2) do edges have numbers (weight)?
+
+---
+
+## Chapter 2: Graph Representation in Java
+
+Four ways to store a graph in memory:
+
+| Method | When to use |
+|---|---|
+| **Adjacency List** | Most common, most efficient — used in almost all algorithms |
+| **Adjacency Matrix** | Simple lookups of "does edge exist between i,j" — wastes space |
+| **Edge List** | When you need to **sort edges** (e.g., MST/Kruskal's) |
+| **Implicit Graph** | 2D grid problems (flood fill, matrix traversal) — no explicit graph built |
+
+### 1. Adjacency List (Most Important)
+"List of lists" — an array where each index holds a list of edges from that vertex.
+
+```java
+static class Edge {
+    int src, dest, wt;   // wt optional for unweighted graphs
+    Edge(int s, int d, int w) {
+        this.src = s; this.dest = d; this.wt = w;
+    }
+}
+
+static void createGraph(ArrayList<Edge>[] graph) {
+    for (int i = 0; i < graph.length; i++) {
+        graph[i] = new ArrayList<>();   // avoid NullPointerException
+    }
+    graph[0].add(new Edge(0, 1, 10));
+    graph[1].add(new Edge(1, 0, 10));  // undirected → add both directions
+    // ... add all edges
+}
+
+// Usage:
+ArrayList<Edge>[] graph = new ArrayList[V];
+```
+
+**Why Adjacency List is optimal:**
+- Finding all neighbors of vertex `v` with `x` neighbors takes **O(x)** time (only stores what's needed)
+- Adjacency Matrix would take **O(V)** time for the same (checks every possible vertex, even unrelated ones) — wasteful when graph is sparse.
+
+### 2. Adjacency Matrix
+`V x V` 2D array. `matrix[i][j] = 1` (or weight) if edge exists, else `0`.
+- **Space:** O(V²) — wasteful for sparse graphs
+- **Find neighbors:** O(V) — must scan whole row
+- Good for **dense graphs** or quick edge-existence checks
+
+### 3. Edge List
+Simple list of all edges `(src, dest, weight)`. Best when you need to **sort** edges by weight (used in Kruskal's MST — not covered here, Prim's is used instead).
+
+### 4. Implicit Graph
+Used when a 2D matrix itself acts as a graph (each cell = vertex, 4-directional neighbors = edges). Common in **Flood Fill**, grid BFS/DFS problems.
+
+---
+
+## Chapter 3: Graph Traversals — BFS & DFS
+
+### BFS (Breadth First Search)
+- Visits **immediate neighbors first** (level-order traversal)
+- Uses a **Queue**
+- Analogy: fire spreading — alert nearby people before far ones
+
+```java
+static void bfs(ArrayList<Edge>[] graph, int V) {
+    Queue<Integer> q = new LinkedList<>();
+    boolean[] visited = new boolean[V];
+    q.add(0);  // start node
+
+    while (!q.isEmpty()) {
+        int curr = q.remove();
+        if (!visited[curr]) {
+            visited[curr] = true;
+            System.out.print(curr + " ");
+            for (int i = 0; i < graph[curr].size(); i++) {
+                Edge e = graph[curr].get(i);
+                q.add(e.dest);
+            }
+        }
+    }
+}
+```
+**Time Complexity:** O(V + E)
+
+### DFS (Depth First Search)
+- Goes **deep into one branch first**, then backtracks (like recursion / tree preorder)
+- Uses **recursion** (implicit stack)
+
+```java
+static void dfs(ArrayList<Edge>[] graph, int curr, boolean[] visited) {
+    System.out.print(curr + " ");
+    visited[curr] = true;
+    for (int i = 0; i < graph[curr].size(); i++) {
+        Edge e = graph[curr].get(i);
+        if (!visited[e.dest]) {
+            dfs(graph, e.dest, visited);
+        }
+    }
+}
+```
+**Time Complexity:** O(V + E)
+
+### ⚠️ Disconnected Components
+If the graph has disconnected pieces, a single BFS/DFS call won't cover everything. **Always wrap with a loop:**
+
+```java
+for (int i = 0; i < V; i++) {
+    if (!visited[i]) {
+        dfs(graph, i, visited);   // or bfs starting at i
+    }
+}
+```
+
+### Why Graphs use `visited[]` but Trees don't
+Graphs can have **cycles** — you could revisit the same node infinitely. Trees are hierarchical (no cycles), so no revisit risk.
+
+---
+
+## Chapter 4: Has Path / Print All Paths (Source → Target)
+
+Given source & target, print all paths (Modified DFS).
+
+**Key idea:** Track current path in a list; when `target` is reached, print the path. Use **visited/unvisited toggling** (not permanent) — because you need to explore *all* paths, not just one.
+
+```java
+static void printAllPaths(ArrayList<Edge>[] graph, boolean[] visited,
+                           int curr, String path, int target) {
+    if (curr == target) {
+        System.out.println(path);
+        return;
+    }
+    for (int i = 0; i < graph[curr].size(); i++) {
+        Edge e = graph[curr].get(i);
+        if (!visited[e.dest]) {
+            visited[curr] = true;                 // mark before recursing
+            printAllPaths(graph, visited, e.dest, path + e.dest, target);
+            visited[curr] = false;                // unmark after (backtrack!)
+        }
+    }
+}
+```
+**Time Complexity:** O(V^V) — exponential (explores all paths). Works only on small graphs.
+
+**Why unmark visited after recursion?** Because the same node might be part of multiple valid paths from different routes. Permanent marking (like plain DFS) would block valid alternate paths.
+
+---
+
+## Chapter 5: Cycle Detection
+
+### 5a. In Undirected Graph (using DFS)
+Track **parent**. A cycle exists if you find a neighbor that is **visited AND not your parent**.
+
+```java
+static boolean isCycleUndirected(ArrayList<Edge>[] graph, boolean[] visited,
+                                  int curr, int parent) {
+    visited[curr] = true;
+    for (int i = 0; i < graph[curr].size(); i++) {
+        Edge e = graph[curr].get(i);
+        if (visited[e.dest] && e.dest != parent) {
+            return true;                     // cycle found
+        } else if (!visited[e.dest]) {
+            if (isCycleUndirected(graph, visited, e.dest, curr)) return true;
+        }
+        // if visited AND == parent → do nothing (that's the edge we came from)
+    }
+    return false;
+}
+```
+
+### 5b. In Directed Graph (using DFS + Recursion Stack)
+**Undirected logic FAILS here.** Need a separate `recursionStack[]` array to track nodes in the *current* DFS call chain.
+
+**Cycle condition:** neighbor exists in the recursion stack (not just visited overall).
+
+```java
+static boolean isCycleDirected(ArrayList<Edge>[] graph, boolean[] visited,
+                                boolean[] inRecursion, int curr) {
+    visited[curr] = true;
+    inRecursion[curr] = true;
+
+    for (int i = 0; i < graph[curr].size(); i++) {
+        Edge e = graph[curr].get(i);
+        if (inRecursion[e.dest]) return true;              // cycle!
+        else if (!visited[e.dest]) {
+            if (isCycleDirected(graph, visited, inRecursion, e.dest)) return true;
+        }
+    }
+    inRecursion[curr] = false;   // remove from recursion stack on backtrack
+    return false;
+}
+```
+**Why undirected approach fails for directed graphs:** In undirected, checking "visited and not parent" gives false positives for directed graphs (a node can be visited via another branch without being an ancestor).
+
+**Time Complexity (both):** O(V + E)
+
+---
+
+## Chapter 6: Topological Sort
+
+### Definition
+A **linear ordering of vertices** such that for every directed edge `u → v`, `u` comes before `v` in the ordering.
+
+- Only works on **DAG (Directed Acyclic Graph)** — directed + no cycles
+- Represents **dependency order** (e.g., "buy laptop" → "install OS" → "install code editor"/"install Java" → "write code")
+
+### Algorithm (Modified DFS + Stack)
+Do normal DFS; **on backtracking, push the current node to a stack.** At the end, pop all elements from stack = topological order.
+
+```java
+static void topoSortUtil(ArrayList<Edge>[] graph, int curr, boolean[] visited, Stack<Integer> s) {
+    visited[curr] = true;
+    for (int i = 0; i < graph[curr].size(); i++) {
+        Edge e = graph[curr].get(i);
+        if (!visited[e.dest]) {
+            topoSortUtil(graph, e.dest, visited, s);
+        }
+    }
+    s.push(curr);     // ⭐ the only difference from plain DFS
+}
+
+static void topoSort(ArrayList<Edge>[] graph, int V) {
+    Stack<Integer> s = new Stack<>();
+    boolean[] visited = new boolean[V];
+    for (int i = 0; i < V; i++) {
+        if (!visited[i]) topoSortUtil(graph, i, visited, s);
+    }
+    while (!s.isEmpty()) System.out.print(s.pop() + " ");
+}
+```
+**Time Complexity:** O(V + E)
+**Key insight:** Topological sort = DFS + "push to stack on backtrack." Multiple valid orderings can exist.
+
+---
+
+## Chapter 7: Shortest Path Algorithms
+
+### 7a. Dijkstra's Algorithm
+**Finds shortest distance from ONE source to ALL vertices.** Works only with **non-negative weights**.
+
+- **Type:** Greedy algorithm
+- **Data structures:** PriorityQueue (min-heap, sorted by distance) + `distance[]` array
+- **Core idea (Relaxation):** If `dist[u] + weight(u,v) < dist[v]`, then update `dist[v] = dist[u] + weight(u,v)`
+
+```java
+static class Pair implements Comparable<Pair> {
+    int node, dist;
+    Pair(int n, int d) { node = n; dist = d; }
+    public int compareTo(Pair p2) { return this.dist - p2.dist; }  // min-heap by dist
+}
+
+static void dijkstra(ArrayList<Edge>[] graph, int src, int V) {
+    PriorityQueue<Pair> pq = new PriorityQueue<>();
+    int[] dist = new int[V];
+    boolean[] visited = new boolean[V];
+    for (int i = 0; i < V; i++) dist[i] = (i == src) ? 0 : Integer.MAX_VALUE;
+    pq.add(new Pair(src, 0));
+
+    while (!pq.isEmpty()) {
+        Pair curr = pq.remove();
+        if (!visited[curr.node]) {
+            visited[curr.node] = true;
+            for (Edge e : graph[curr.node]) {
+                int u = e.src, v = e.dest, w = e.wt;
+                if (dist[u] + w < dist[v]) {
+                    dist[v] = dist[u] + w;
+                    pq.add(new Pair(v, dist[v]));
+                }
+            }
+        }
+    }
+    // dist[] now holds shortest distance from src to every vertex
+}
+```
+**Time Complexity:** O(E log E) — because PQ can hold up to E edges, and sorting takes log E.
+
+**⚠️ Fails when negative edge weights exist** — use Bellman-Ford instead.
+
+---
+
+### 7b. Bellman-Ford Algorithm
+**Works even with negative weights** (but NOT with negative weight cycles).
+
+- **Type:** Dynamic Programming based
+- **Core rule:** Relax **all edges, V−1 times**
+- Simpler code than Dijkstra, but slower.
+
+```java
+static void bellmanFord(ArrayList<Edge>[] graph, int src, int V) {
+    int[] dist = new int[V];
+    for (int i = 0; i < V; i++) dist[i] = (i == src) ? 0 : Integer.MAX_VALUE;
+
+    for (int k = 0; k < V - 1; k++) {                 // outer loop: V-1 times
+        for (int i = 0; i < V; i++) {                  // inner: all edges
+            for (int j = 0; j < graph[i].size(); j++) {
+                Edge e = graph[i].get(j);
+                int u = e.src, v = e.dest, wt = e.wt;
+                if (dist[u] != Integer.MAX_VALUE && dist[u] + wt < dist[v]) {
+                    dist[v] = dist[u] + wt;
+                }
+            }
+        }
+    }
+}
+```
+**Why V−1 iterations?** The longest possible shortest path between any two vertices in a graph has at most V−1 edges.
+
+**Negative Weight Cycle Detection:** Run **one extra iteration** after the main V−1 loop. If any distance still updates → a negative weight cycle exists (shortest path is undefined/−∞ in that case).
+
+**Time Complexity:** O(V × E)
+
+| | Dijkstra | Bellman-Ford |
+|---|---|---|
+| Weights | Non-negative only | Works with negative (not negative cycles) |
+| Approach | Greedy | Dynamic Programming |
+| Time | O(E log E) | O(V × E) |
+| Use when | No negative weights (faster) | Negative weights possible |
+
+---
+
+## Chapter 8: Minimum Spanning Tree (MST) — Prim's Algorithm
+
+### Definition
+A **subgraph** of a given (undirected, weighted, connected) graph that:
+1. Includes **all vertices**
+2. Keeps the graph **connected**
+3. Has **no cycles** (hence called a "tree")
+4. Has the **minimum possible total edge weight**
+
+### Prim's Algorithm — Concept
+Maintain two conceptual sets:
+- **MST set** — vertices already included in MST (tracked via `visited[]`)
+- **Non-MST set** — remaining vertices (tracked via `PriorityQueue`)
+
+At each step: pick the **minimum cost edge** connecting MST set → Non-MST set, add that vertex to MST.
+
+```java
+static class Pair implements Comparable<Pair> {
+    int node, cost;
+    Pair(int n, int c) { node = n; cost = c; }
+    public int compareTo(Pair p2) { return this.cost - p2.cost; }
+}
+
+static void primsAlgo(ArrayList<Edge>[] graph, int V) {
+    boolean[] visited = new boolean[V];
+    PriorityQueue<Pair> pq = new PriorityQueue<>();
+    pq.add(new Pair(0, 0));   // start node, cost 0
+    int mstCost = 0;
+
+    while (!pq.isEmpty()) {
+        Pair curr = pq.remove();
+        if (!visited[curr.node]) {
+            visited[curr.node] = true;
+            mstCost += curr.cost;
+            for (int i = 0; i < graph[curr.node].size(); i++) {
+                Edge e = graph[curr.node].get(i);
+                if (!visited[e.dest]) {
+                    pq.add(new Pair(e.dest, e.wt));
+                }
+            }
+        }
+    }
+    System.out.println("Min cost of MST: " + mstCost);
+}
+```
+**Time Complexity:** O(E log E)
+**Key insight:** PQ (min-heap) = "non-MST set" (always gives minimum-cost unvisited edge), `visited[]` = "MST set."
+
+---
+
+## Chapter 9: Strongly Connected Components (SCC) — Kosaraju's Algorithm
+
+### Definition
+A **strongly connected component** is a portion of a **directed graph** where **every vertex can reach every other vertex** within that portion.
+
+> Only applies to **directed graphs** (in undirected graphs, the whole connected graph is trivially one SCC).
+
+### Kosaraju's Algorithm — 3 Steps
+
+1. **Topological Sort** — do DFS on original graph, push nodes to a stack on backtrack (same as Ch. 7)
+2. **Transpose the graph** — reverse the direction of every edge (same vertices, flipped edges)
+3. **DFS on transposed graph**, popping nodes from the stack one at a time — each DFS call (that doesn't revisit) = one SCC
+
+```java
+static void kosarajuAlgo(ArrayList<Edge>[] graph, int V) {
+    Stack<Integer> s = new Stack<>();
+    boolean[] visited = new boolean[V];
+
+    // Step 1: Topological order
+    for (int i = 0; i < V; i++) {
+        if (!visited[i]) topoSort(graph, i, visited, s);
+    }
+
+    // Step 2: Transpose graph
+    ArrayList<Edge>[] transpose = new ArrayList[V];
+    for (int i = 0; i < V; i++) transpose[i] = new ArrayList<>();
+    for (int i = 0; i < V; i++) {
+        for (int j = 0; j < graph[i].size(); j++) {
+            Edge e = graph[i].get(j);
+            transpose[e.dest].add(new Edge(e.dest, e.src, e.wt));
+        }
+    }
+
+    // Step 3: DFS on transpose using stack order
+    Arrays.fill(visited, false);
+    while (!s.isEmpty()) {
+        int curr = s.pop();
+        if (!visited[curr]) {
+            dfs(transpose, curr, visited);   // prints one SCC
+            System.out.println();
+        }
+    }
+}
+```
+**Time Complexity:** O(V + E) — each of the 3 steps is O(V + E).
+
+---
+
+## Chapter 10: Bridges in a Graph (Tarjan's Algorithm)
+
+### Definition
+A **bridge** is an edge which, if removed, **increases the number of connected components** (disconnects the graph).
+
+### Core Concept: Discovery Time & Lowest Time
+Two arrays tracked during DFS:
+- **`disc[]`** — Discovery Time: when a node was first visited (timestamp)
+- **`low[]`** — Lowest Discovery Time: the lowest disc time reachable from this node (including itself and all its subtree/neighbors)
+
+### Bridge Condition
+For an edge `u → v` (where v was discovered via u):
+```
+if (disc[u] < low[v])  →  edge (u, v) is a BRIDGE
+```
+**Why?** If v (and everything reachable from v) can ONLY be reached through u, removing edge u-v disconnects the graph. If there's a "back edge" giving an alternate route, `low[v]` would be ≤ `disc[u]`.
+
+```java
+static void bridgeDFS(ArrayList<Edge>[] graph, int curr, boolean[] visited,
+                       int[] disc, int[] low, int[] timeArr, int parent) {
+    visited[curr] = true;
+    disc[curr] = low[curr] = ++timeArr[0];
+
+    for (Edge e : graph[curr]) {
+        int neighbor = e.dest;
+        if (neighbor == parent) continue;                       // skip parent edge
+        else if (!visited[neighbor]) {
+            bridgeDFS(graph, neighbor, visited, disc, low, timeArr, curr);
+            low[curr] = Math.min(low[curr], low[neighbor]);
+            if (disc[curr] < low[neighbor]) {
+                System.out.println("Bridge: " + curr + " -- " + neighbor);
+            }
+        } else {
+            low[curr] = Math.min(low[curr], disc[neighbor]);     // back edge
+        }
+    }
+}
+```
+**Time Complexity:** O(V + E)
+
+---
+
+## Chapter 11: Articulation Points (Tarjan's Algorithm)
+
+### Definition
+An **articulation point (cut vertex)** is a vertex which, if removed (along with its edges), **increases the number of connected components**.
+
+**Real-world use:** Finding weak points / single-point-of-failure in a network (e.g., server network).
+
+### Two Conditions for a Node to be an Articulation Point
+
+**Case 1 — Node is DFS root (parent == -1):**
+```
+If root has ≥ 2 DISCONNECTED children → root is an articulation point
+```
+(Disconnected children = children not linked to each other directly/indirectly.)
+
+**Case 2 — Node is NOT DFS root:**
+```
+if (disc[curr] <= low[neighbor])  →  curr is an articulation point
+```
+(Note: uses `<=`, unlike bridges which use strict `<`. This also catches cycle-root cases.)
+
+### Full DFS Logic (3 neighbor cases)
+1. **Neighbor == parent** → ignore (continue)
+2. **Neighbor already visited** (not parent) → it's an **ancestor** (back edge) → just update `low[curr] = min(low[curr], disc[neighbor])`
+3. **Neighbor unvisited** → it's a **child** → recurse DFS, then:
+   - `low[curr] = min(low[curr], low[neighbor])`
+   - Check articulation condition: `if (disc[curr] <= low[neighbor] && parent != -1)` → mark as AP
+   - `children++`
+
+At the end (after loop): `if (parent == -1 && children > 1)` → mark as AP
+
+```java
+static void apDFS(ArrayList<Edge>[] graph, int curr, int parent, boolean[] visited,
+                   int[] disc, int[] low, int[] time, boolean[] isAP) {
+    visited[curr] = true;
+    disc[curr] = low[curr] = ++time[0];
+    int children = 0;
+
+    for (Edge e : graph[curr]) {
+        int neighbor = e.dest;
+        if (neighbor == parent) continue;
+        else if (visited[neighbor]) {
+            low[curr] = Math.min(low[curr], disc[neighbor]);
+        } else {
+            apDFS(graph, neighbor, curr, visited, disc, low, time, isAP);
+            low[curr] = Math.min(low[curr], low[neighbor]);
+            if (disc[curr] <= low[neighbor] && parent != -1) {
+                isAP[curr] = true;
+            }
+            children++;
+        }
+    }
+    if (parent == -1 && children > 1) {
+        isAP[curr] = true;
+    }
+}
+```
+**Time Complexity:** O(V + E)
+
+**⚠️ Important subtlety:** For neighbor-already-visited case, you MUST compare against `disc[neighbor]`, NOT `low[neighbor]`. Using `low[neighbor]` can propagate an incorrectly small value through a cycle and cause the algorithm to miss valid articulation points.
+
+---
+
+## Revision Table — All Algorithms
+
+| Algorithm | Purpose | Technique | Time Complexity |
+|---|---|---|---|
+| BFS | Level-order traversal | Queue | O(V + E) |
+| DFS | Depth traversal | Recursion | O(V + E) |
+| Print All Paths | Source → target, all routes | Modified DFS + backtracking | O(V^V) |
+| Cycle Detection (Undirected) | Detect cycle | DFS + parent check | O(V + E) |
+| Cycle Detection (Directed) | Detect cycle | DFS + recursion stack | O(V + E) |
+| Topological Sort | Dependency order (DAG only) | DFS + stack (push on backtrack) | O(V + E) |
+| Dijkstra | Shortest path (non-negative wt) | Greedy + PriorityQueue | O(E log E) |
+| Bellman-Ford | Shortest path (handles negative wt) | DP, relax all edges V−1 times | O(V × E) |
+| Prim's (MST) | Min cost spanning tree | Greedy + PriorityQueue | O(E log E) |
+| Kosaraju's (SCC) | Strongly connected components | DFS + Transpose + DFS | O(V + E) |
+| Bridges (Tarjan's) | Critical edges | DFS + disc[]/low[] | O(V + E) |
+| Articulation Points (Tarjan's) | Critical vertices | DFS + disc[]/low[] + children count | O(V + E) |
+
+### Common Interview Follow-ups
+- **Why adjacency list over matrix?** O(x) vs O(V) for neighbor lookup; O(V+E) vs O(V²) space.
+- **Why does undirected cycle detection fail for directed graphs?** Because "visited but not parent" doesn't distinguish between a genuine cycle and a cross-branch already-visited node reached without a true back-path.
+- **Dijkstra vs Bellman-Ford:** negative weights → must use Bellman-Ford.
+- **Bridge uses `<`, Articulation Point uses `<=`** — because a self-cycle-root case (`disc == low`) still makes a vertex an AP but not an edge a bridge.
